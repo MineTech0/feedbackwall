@@ -1,0 +1,66 @@
+# =============================================================================
+# Docker Ignore - Production Build
+# =============================================================================
+# Nämä tiedostot/kansiot jätetään pois Docker build contextista
+# =============================================================================
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE & Editor
+.idea
+.vscode
+*.swp
+*.swo
+.cursor
+
+# Node.js - asennetaan build stagessa
+node_modules
+
+# Laravel development
+.env
+.env.*
+!.env.example
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+
+# Development files
+tests
+phpunit.xml
+.phpunit.result.cache
+.phpunit.cache
+
+# Build artifacts (rakennetaan uudelleen)
+public/build
+public/hot
+vendor
+
+# Documentation (ei tarvita tuotannossa)
+docs
+*.md
+!README.md
+
+# Development compose
+compose.yaml
+
+# Laravel Sail (development only)
+docker-compose.yml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Misc
+.editorconfig
+.styleci.yml
+

@@ -1,0 +1,140 @@
+# =============================================================================
+# PALAUTESEINÄ (FEEDBACK WALL) - PRODUCTION DOCKERFILE
+# =============================================================================
+# Multi-stage build:
+#   1. node-builder: npm install & vite build
+#   2. composer-builder: composer install --no-dev
+#   3. production: ServersideUp PHP image + built assets
+#
+# Image: serversideup/php:8.3-fpm-nginx
+# Perustelu:
+#   - Vakaa ja hyvin dokumentoitu
+#   - Nginx servaa staattiset tiedostot tehokkaasti
+#   - OPcache valmiiksi konfiguroitu
+#   - S6 overlay prosessinhallintaan
+#   - Healthcheck endpointit sisäänrakennettu
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# STAGE 1: Node.js - Build Vite assets
+# -----------------------------------------------------------------------------
+FROM node:22-alpine AS node-builder
+
+WORKDIR /build
+
+# Kopioi package files ensin (cache optimization)
+COPY package.json package-lock.json ./
+
+# Asenna riippuvuudet
+RUN npm ci --ignore-scripts
+
+# Kopioi source files
+COPY resources/ ./resources/
+COPY vite.config.js ./
+COPY tailwind.config.js ./
+COPY postcss.config.js* ./
+
+# Build assets
+RUN npm run build
+
+# -----------------------------------------------------------------------------
+# STAGE 2: Composer - Install PHP dependencies
+# -----------------------------------------------------------------------------
+FROM composer:2 AS composer-builder
+
+WORKDIR /build
+
+# Kopioi composer files
+COPY composer.json composer.lock ./
+
+# Asenna riippuvuudet (ilman dev-paketteja)
+RUN composer install \
+    --no-dev \
+    --no-interaction \
+    --no-scripts \
+    --no-autoloader \
+    --prefer-dist \
+    --ignore-platform-reqs
+
+# Kopioi koko Laravel-sovellus
+COPY . .
+
+# Dump optimized autoloader
+RUN composer dump-autoload \
+    --no-dev \
+    --optimize \
+    --classmap-authoritative
+
+# -----------------------------------------------------------------------------
+# STAGE 3: Production image
+# -----------------------------------------------------------------------------
+ARG PHP_VERSION=8.3
+FROM serversideup/php:${PHP_VERSION}-fpm-nginx AS production
+
+# Metadata
+LABEL maintainer="your-email@example.com"
+LABEL description="Palauteseinä (Feedback Wall) - Production Image"
+LABEL org.opencontainers.image.source="https://github.com/your-org/feedbackwall"
+
+# Työkansio
+WORKDIR /var/www/html
+
+# PHP tuning ympäristömuuttujat (ServersideUp tukee näitä)
+ENV SSL_MODE="off" \
+    PHP_OPCACHE_ENABLE="1" \
+    PHP_OPCACHE_MEMORY_CONSUMPTION="128" \
+    PHP_OPCACHE_INTERNED_STRINGS_BUFFER="16" \
+    PHP_OPCACHE_MAX_ACCELERATED_FILES="20000" \
+    PHP_OPCACHE_VALIDATE_TIMESTAMPS="0" \
+    PHP_OPCACHE_SAVE_COMMENTS="1" \
+    PHP_OPCACHE_ENABLE_FILE_OVERRIDE="1" \
+    PHP_MEMORY_LIMIT="256M" \
+    PHP_MAX_EXECUTION_TIME="30" \
+    PHP_POST_MAX_SIZE="64M" \
+    PHP_UPLOAD_MAX_FILESIZE="64M" \
+    AUTORUN_ENABLED="false"
+
+# Kopioi composer riippuvuudet
+COPY --from=composer-builder --chown=www-data:www-data /build/vendor ./vendor
+
+# Kopioi Laravel-sovellus (paitsi mitä ei tarvita)
+COPY --chown=www-data:www-data app ./app
+COPY --chown=www-data:www-data bootstrap ./bootstrap
+COPY --chown=www-data:www-data config ./config
+COPY --chown=www-data:www-data database ./database
+COPY --chown=www-data:www-data lang ./lang
+COPY --chown=www-data:www-data public ./public
+COPY --chown=www-data:www-data resources/views ./resources/views
+COPY --chown=www-data:www-data routes ./routes
+COPY --chown=www-data:www-data storage ./storage
+COPY --chown=www-data:www-data artisan ./artisan
+COPY --chown=www-data:www-data composer.json ./composer.json
+
+# Kopioi rakennetut Vite assets
+COPY --from=node-builder --chown=www-data:www-data /build/public/build ./public/build
+
+# Kopioi entrypoint skripti
+COPY --chown=www-data:www-data docker/entrypoint.sh /etc/entrypoint.d/99-laravel.sh
+RUN chmod +x /etc/entrypoint.d/99-laravel.sh
+
+# Luo tarvittavat kansiot ja aseta oikeudet
+RUN mkdir -p \
+    storage/app/public \
+    storage/framework/cache/data \
+    storage/framework/sessions \
+    storage/framework/views \
+    storage/logs \
+    bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache \
+    && chmod -R 775 storage bootstrap/cache
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8080/up || exit 1
+
+# Port
+EXPOSE 8080
+
+# Metadata for Coolify
+LABEL coolify.port="8080"
+

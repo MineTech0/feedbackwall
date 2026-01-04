@@ -1,0 +1,353 @@
+# =============================================================================
+# PALAUTESEINÄ (FEEDBACK WALL) - PRODUCTION DOCKER COMPOSE
+# =============================================================================
+# Käyttö: Coolify Docker Compose -projekti
+# 
+# ServersideUp PHP Image: serversideup/php:8.3-fpm-nginx
+# Valinta perusteltu:
+#   - FPM + Nginx on vakain ja testatuin combo Laravelille
+#   - Erinomainen suorituskyky OPcache + Nginx staattisille tiedostoille
+#   - Laaja yhteisötuki ja dokumentaatio
+#   - Helppo debugata ongelmatilanteissa
+#   - ServersideUp image sisältää:
+#     * OPcache valmiiksi konfiguroitu
+#     * www-data käyttäjä (UID 1000)
+#     * Healthcheck endpointit
+#     * Composer ja Node.js build tools
+#
+# Vaihtoehto (modernimpi): serversideup/php:8.3-frankenphp
+#   - Yksinkertaisempi (yksi prosessi)
+#   - Laravel Octane -yhteensopiva
+#   - Mutta: Uudempi, vähemmän dokumentaatiota
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # APP - Laravel + Nginx (PHP-FPM)
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+      args:
+        # ServersideUp base image
+        PHP_VERSION: "8.3"
+    image: ${REGISTRY:-}feedbackwall:${IMAGE_TAG:-latest}
+    container_name: feedbackwall-app
+    restart: unless-stopped
+    
+    # Coolify proxy kuuntelee tätä porttia
+    expose:
+      - "8080"
+    
+    environment:
+      # ServersideUp spesifiset
+      SSL_MODE: "off"                    # Coolify hoitaa SSL:n
+      PHP_OPCACHE_ENABLE: "1"
+      PHP_MEMORY_LIMIT: "256M"
+      PHP_MAX_EXECUTION_TIME: "30"
+      PHP_POST_MAX_SIZE: "64M"
+      PHP_UPLOAD_MAX_FILESIZE: "64M"
+      
+      # Laravel ympäristömuuttujat (Coolify injektoi nämä)
+      APP_NAME: ${APP_NAME:-Palauteseinä}
+      APP_ENV: ${APP_ENV:-production}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_URL: ${APP_URL}
+      APP_KEY: ${APP_KEY}
+      
+      LOG_CHANNEL: ${LOG_CHANNEL:-stderr}
+      LOG_LEVEL: ${LOG_LEVEL:-warning}
+      
+      DB_CONNECTION: ${DB_CONNECTION:-pgsql}
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_DATABASE: ${DB_DATABASE:-feedbackwall}
+      DB_USERNAME: ${DB_USERNAME:-feedbackwall}
+      DB_PASSWORD: ${DB_PASSWORD}
+      
+      CACHE_STORE: ${CACHE_STORE:-redis}
+      SESSION_DRIVER: ${SESSION_DRIVER:-redis}
+      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-redis}
+      
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-null}
+      
+      MAIL_MAILER: ${MAIL_MAILER:-smtp}
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_ENCRYPTION: ${MAIL_ENCRYPTION:-tls}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Palauteseinä}
+      
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${APP_URL}/auth/google/callback
+      
+      TELESCOPE_ENABLED: ${TELESCOPE_ENABLED:-true}
+      
+      # Deployment flag
+      RUN_MIGRATIONS: ${RUN_MIGRATIONS:-false}
+    
+    volumes:
+      # Persistent storage
+      - app-storage:/var/www/html/storage/app
+      - app-logs:/var/www/html/storage/logs
+    
+    networks:
+      - feedbackwall-internal
+      - coolify                          # Coolify proxy verkko
+    
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/up"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    labels:
+      # Coolify routing (vaihtoehto 1: käytä Coolify UI:ta)
+      # Tai konfiguroi labels:
+      - "coolify.managed=true"
+  
+  # ---------------------------------------------------------------------------
+  # QUEUE WORKER
+  # ---------------------------------------------------------------------------
+  queue:
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+      args:
+        PHP_VERSION: "8.3"
+    image: ${REGISTRY:-}feedbackwall:${IMAGE_TAG:-latest}
+    container_name: feedbackwall-queue
+    restart: unless-stopped
+    
+    # Override: aja queue worker eikä web serveriä
+    command: ["php", "artisan", "queue:work", "--sleep=3", "--tries=3", "--max-time=3600", "--memory=128"]
+    
+    environment:
+      # Samat kuin app, mutta ilman web-spesifejä
+      APP_NAME: ${APP_NAME:-Palauteseinä}
+      APP_ENV: ${APP_ENV:-production}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_URL: ${APP_URL}
+      APP_KEY: ${APP_KEY}
+      
+      LOG_CHANNEL: ${LOG_CHANNEL:-stderr}
+      LOG_LEVEL: ${LOG_LEVEL:-warning}
+      
+      DB_CONNECTION: ${DB_CONNECTION:-pgsql}
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_DATABASE: ${DB_DATABASE:-feedbackwall}
+      DB_USERNAME: ${DB_USERNAME:-feedbackwall}
+      DB_PASSWORD: ${DB_PASSWORD}
+      
+      CACHE_STORE: ${CACHE_STORE:-redis}
+      SESSION_DRIVER: ${SESSION_DRIVER:-redis}
+      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-redis}
+      
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-null}
+      
+      MAIL_MAILER: ${MAIL_MAILER:-smtp}
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_ENCRYPTION: ${MAIL_ENCRYPTION:-tls}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Palauteseinä}
+    
+    volumes:
+      - app-storage:/var/www/html/storage/app
+      - app-logs:/var/www/html/storage/logs
+    
+    networks:
+      - feedbackwall-internal
+    
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    
+    healthcheck:
+      test: ["CMD", "php", "artisan", "queue:monitor", "default", "--max=100"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+  
+  # ---------------------------------------------------------------------------
+  # SCHEDULER (Cron)
+  # ---------------------------------------------------------------------------
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+      args:
+        PHP_VERSION: "8.3"
+    image: ${REGISTRY:-}feedbackwall:${IMAGE_TAG:-latest}
+    container_name: feedbackwall-scheduler
+    restart: unless-stopped
+    
+    # Override: aja scheduler
+    command: ["php", "artisan", "schedule:work"]
+    
+    environment:
+      APP_NAME: ${APP_NAME:-Palauteseinä}
+      APP_ENV: ${APP_ENV:-production}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_URL: ${APP_URL}
+      APP_KEY: ${APP_KEY}
+      
+      LOG_CHANNEL: ${LOG_CHANNEL:-stderr}
+      LOG_LEVEL: ${LOG_LEVEL:-warning}
+      
+      DB_CONNECTION: ${DB_CONNECTION:-pgsql}
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_DATABASE: ${DB_DATABASE:-feedbackwall}
+      DB_USERNAME: ${DB_USERNAME:-feedbackwall}
+      DB_PASSWORD: ${DB_PASSWORD}
+      
+      CACHE_STORE: ${CACHE_STORE:-redis}
+      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-redis}
+      
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-null}
+    
+    volumes:
+      - app-storage:/var/www/html/storage/app
+      - app-logs:/var/www/html/storage/logs
+    
+    networks:
+      - feedbackwall-internal
+    
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+  
+  # ---------------------------------------------------------------------------
+  # POSTGRES (Database)
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: feedbackwall-postgres
+    restart: unless-stopped
+    
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-feedbackwall}
+      POSTGRES_USER: ${DB_USERNAME:-feedbackwall}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    
+    networks:
+      - feedbackwall-internal
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-feedbackwall} -d ${DB_DATABASE:-feedbackwall}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+  
+  # ---------------------------------------------------------------------------
+  # REDIS (Cache, Session, Queue)
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: feedbackwall-redis
+    restart: unless-stopped
+    
+    command: >
+      redis-server
+      --appendonly yes
+      --requirepass ${REDIS_PASSWORD:-null}
+      --maxmemory 128mb
+      --maxmemory-policy allkeys-lru
+    
+    volumes:
+      - redis-data:/data
+    
+    networks:
+      - feedbackwall-internal
+    
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-null}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+networks:
+  feedbackwall-internal:
+    driver: bridge
+    internal: true                       # Ei ulkoista pääsyä
+  
+  coolify:
+    external: true                       # Coolify luo tämän
+
+# =============================================================================
+# VOLUMES
+# =============================================================================
+volumes:
+  app-storage:
+    driver: local
+  app-logs:
+    driver: local
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+
+# =============================================================================
+# HUOMIOT COOLIFY-KÄYTÖSSÄ
+# =============================================================================
+# 1. Ympäristömuuttujat:
+#    - Älä kovakoodaa salaisuuksia tähän tiedostoon
+#    - Konfiguroi Coolify UI:ssa: Settings → Environment Variables
+#
+# 2. Domain & HTTPS:
+#    - Konfiguroi Coolify UI:ssa: Settings → Domains
+#    - Coolify hoitaa Let's Encrypt automaattisesti
+#
+# 3. Networking:
+#    - 'coolify' verkko on external, Coolify luo sen
+#    - Jos Coolify ei löydä sitä, luo manuaalisesti:
+#      docker network create coolify
+#
+# 4. Volumes:
+#    - Coolify hallinnoi volumeja automaattisesti
+#    - Backup: Coolify → Settings → Backup
+#
+# 5. Ensimmäinen deploy:
+#    - Aseta RUN_MIGRATIONS=true
+#    - Deploy
+#    - Aseta RUN_MIGRATIONS=false
+#
+# 6. Updates:
+#    - Coolify ajaa 'docker compose pull && docker compose up -d'
+#    - Queue restart: php artisan queue:restart (ajaa sig handler)
+

@@ -1,0 +1,123 @@
+# =============================================================================
+# PALAUTESEINÄ (FEEDBACK WALL) - PRODUCTION ENVIRONMENT TEMPLATE
+# =============================================================================
+# Kopioi tämä tiedoston sisältö Coolify → Settings → Environment Variables
+# Älä lisää oikeita salaisuuksia Git-repoon!
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# APPLICATION
+# -----------------------------------------------------------------------------
+APP_NAME="Palauteseinä"
+APP_ENV=production
+APP_DEBUG=false
+APP_TIMEZONE=UTC
+APP_URL=${APP_URL}
+
+# Generoi: php artisan key:generate --show
+APP_KEY=${APP_KEY}
+
+APP_LOCALE=fi
+APP_FALLBACK_LOCALE=en
+
+# Maintenance mode (cache = jaettu tila multi-instance deployssa)
+APP_MAINTENANCE_DRIVER=file
+
+# -----------------------------------------------------------------------------
+# LOGGING
+# -----------------------------------------------------------------------------
+# Docker best practice: stderr → docker logs → Coolify UI
+LOG_CHANNEL=stderr
+LOG_STACK=single
+LOG_DEPRECATIONS_CHANNEL=null
+LOG_LEVEL=warning
+
+# -----------------------------------------------------------------------------
+# DATABASE
+# -----------------------------------------------------------------------------
+DB_CONNECTION=pgsql
+DB_HOST=postgres
+DB_PORT=5432
+DB_DATABASE=${DB_DATABASE:-feedbackwall}
+DB_USERNAME=${DB_USERNAME:-feedbackwall}
+DB_PASSWORD=${DB_PASSWORD}
+
+# -----------------------------------------------------------------------------
+# CACHE, SESSION & QUEUE
+# -----------------------------------------------------------------------------
+
+# ----- VAIHTOEHTO A: REDIS (suositeltu) -----
+CACHE_STORE=redis
+SESSION_DRIVER=redis
+QUEUE_CONNECTION=redis
+
+REDIS_CLIENT=phpredis
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_PASSWORD=${REDIS_PASSWORD:-null}
+
+# ----- VAIHTOEHTO B: ILMAN REDISTÄ -----
+# CACHE_STORE=database
+# SESSION_DRIVER=database
+# QUEUE_CONNECTION=database
+# (Poista Redis-rivit yllä ja redis service docker-composesta)
+
+# Session settings
+SESSION_LIFETIME=120
+SESSION_ENCRYPT=true
+SESSION_SECURE_COOKIE=true
+SESSION_DOMAIN=${SESSION_DOMAIN}
+
+# -----------------------------------------------------------------------------
+# FILESYSTEM
+# -----------------------------------------------------------------------------
+FILESYSTEM_DISK=local
+
+# S3-compatible storage (valinnainen)
+# AWS_ACCESS_KEY_ID=
+# AWS_SECRET_ACCESS_KEY=
+# AWS_DEFAULT_REGION=eu-north-1
+# AWS_BUCKET=
+# AWS_USE_PATH_STYLE_ENDPOINT=false
+
+# -----------------------------------------------------------------------------
+# MAIL
+# -----------------------------------------------------------------------------
+MAIL_MAILER=smtp
+MAIL_HOST=${MAIL_HOST}
+MAIL_PORT=${MAIL_PORT:-587}
+MAIL_USERNAME=${MAIL_USERNAME}
+MAIL_PASSWORD=${MAIL_PASSWORD}
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS}
+MAIL_FROM_NAME="Palauteseinä"
+
+# -----------------------------------------------------------------------------
+# OAUTH (Google)
+# -----------------------------------------------------------------------------
+GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+GOOGLE_REDIRECT_URI=${APP_URL}/auth/google/callback
+
+# -----------------------------------------------------------------------------
+# TELESCOPE (Debug/Monitoring)
+# -----------------------------------------------------------------------------
+# Tuotannossa: enabled mutta filtteröity (vain virheet)
+TELESCOPE_ENABLED=true
+
+# Poista käytöstä kokonaan jos haluat:
+# TELESCOPE_ENABLED=false
+
+# -----------------------------------------------------------------------------
+# DEPLOYMENT FLAGS
+# -----------------------------------------------------------------------------
+# Aseta true ensimmäisellä deploylla, sitten false
+RUN_MIGRATIONS=false
+
+# =============================================================================
+# COOLIFY-SPESIFISET MUUTTUJAT
+# =============================================================================
+# Nämä Coolify voi injektoida automaattisesti:
+# - SERVICE_FQDN_APP (domain)
+# - SERVICE_URL_APP (URL)
+
