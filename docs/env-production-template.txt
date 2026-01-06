@@ -1,121 +1,66 @@
 # =============================================================================
-# PALAUTESEINÄ (FEEDBACK WALL) - PRODUCTION ENVIRONMENT TEMPLATE
+# PALAUTESEINÄ (FEEDBACK WALL) - COOLIFY ENVIRONMENT VARIABLES
 # =============================================================================
-# Kopioi tämä tiedoston sisältö Coolify → Settings → Environment Variables
-# Älä lisää oikeita salaisuuksia Git-repoon!
+# Aseta nämä muuttujat Coolify UI:ssa: Settings → Environment Variables
+#
+# HUOM: Coolify generoi automaattisesti seuraavat:
+#   - SERVICE_FQDN_APP (domain/URL)
+#   - SERVICE_USER_POSTGRES (PostgreSQL käyttäjä)
+#   - SERVICE_PASSWORD_POSTGRES (PostgreSQL salasana)
+#   - SERVICE_PASSWORD_REDIS (Redis salasana)
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# APPLICATION
+# APPLICATION (PAKOLLINEN)
 # -----------------------------------------------------------------------------
 APP_NAME="Palauteseinä"
 APP_ENV=production
 APP_DEBUG=false
-APP_TIMEZONE=UTC
-APP_URL=${APP_URL}
 
 # Generoi: php artisan key:generate --show
-APP_KEY=${APP_KEY}
-
-APP_LOCALE=fi
-APP_FALLBACK_LOCALE=en
-
-# Maintenance mode (cache = jaettu tila multi-instance deployssa)
-APP_MAINTENANCE_DRIVER=file
+APP_KEY=base64:XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 
 # -----------------------------------------------------------------------------
 # LOGGING
 # -----------------------------------------------------------------------------
-# Docker best practice: stderr → docker logs → Coolify UI
 LOG_CHANNEL=stderr
-LOG_STACK=single
-LOG_DEPRECATIONS_CHANNEL=null
 LOG_LEVEL=warning
 
 # -----------------------------------------------------------------------------
-# DATABASE
-# -----------------------------------------------------------------------------
-DB_CONNECTION=pgsql
-DB_HOST=postgres
-DB_PORT=5432
-DB_DATABASE=${DB_DATABASE:-feedbackwall}
-DB_USERNAME=${DB_USERNAME:-feedbackwall}
-DB_PASSWORD=${DB_PASSWORD}
-
-# -----------------------------------------------------------------------------
-# CACHE, SESSION & QUEUE
-# -----------------------------------------------------------------------------
-
-# ----- VAIHTOEHTO A: REDIS (suositeltu) -----
-CACHE_STORE=redis
-SESSION_DRIVER=redis
-QUEUE_CONNECTION=redis
-
-REDIS_CLIENT=phpredis
-REDIS_HOST=redis
-REDIS_PORT=6379
-REDIS_PASSWORD=${REDIS_PASSWORD:-null}
-
-# ----- VAIHTOEHTO B: ILMAN REDISTÄ -----
-# CACHE_STORE=database
-# SESSION_DRIVER=database
-# QUEUE_CONNECTION=database
-# (Poista Redis-rivit yllä ja redis service docker-composesta)
-
-# Session settings
-SESSION_LIFETIME=120
-SESSION_ENCRYPT=true
-SESSION_SECURE_COOKIE=true
-SESSION_DOMAIN=${SESSION_DOMAIN}
-
-# -----------------------------------------------------------------------------
-# FILESYSTEM
-# -----------------------------------------------------------------------------
-FILESYSTEM_DISK=local
-
-# S3-compatible storage (valinnainen)
-# AWS_ACCESS_KEY_ID=
-# AWS_SECRET_ACCESS_KEY=
-# AWS_DEFAULT_REGION=eu-north-1
-# AWS_BUCKET=
-# AWS_USE_PATH_STYLE_ENDPOINT=false
-
-# -----------------------------------------------------------------------------
-# MAIL
-# -----------------------------------------------------------------------------
-MAIL_MAILER=smtp
-MAIL_HOST=${MAIL_HOST}
-MAIL_PORT=${MAIL_PORT:-587}
-MAIL_USERNAME=${MAIL_USERNAME}
-MAIL_PASSWORD=${MAIL_PASSWORD}
-MAIL_ENCRYPTION=tls
-MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS}
-MAIL_FROM_NAME="Palauteseinä"
-
-# -----------------------------------------------------------------------------
-# OAUTH (Google)
-# -----------------------------------------------------------------------------
-GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-GOOGLE_REDIRECT_URI=${APP_URL}/auth/google/callback
-
-# -----------------------------------------------------------------------------
-# ADMIN & MODERATION
+# ADMIN & MODERATION (PAKOLLINEN)
 # -----------------------------------------------------------------------------
 # Pilkuilla erotettu lista admin-sähköposteista (Google OAuth)
-ADMIN_EMAILS=${ADMIN_EMAILS}
+ADMIN_EMAILS=admin@example.com,teacher@example.com
 
 # Ulkoinen moderointipalvelun URL (valinnainen)
 # MODERATION_SERVICE_URL=https://moderation-api.example.com
 
 # -----------------------------------------------------------------------------
-# TELESCOPE (Debug/Monitoring)
+# GOOGLE OAUTH (PAKOLLINEN kirjautumiseen)
 # -----------------------------------------------------------------------------
-# Tuotannossa: enabled mutta filtteröity (vain virheet)
-TELESCOPE_ENABLED=true
+GOOGLE_CLIENT_ID=xxxxxxxxxxxx.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-xxxxxxxxxxxx
 
-# Poista käytöstä kokonaan jos haluat:
-# TELESCOPE_ENABLED=false
+# -----------------------------------------------------------------------------
+# MAIL (valinnainen)
+# -----------------------------------------------------------------------------
+# Oletuksena log-mailer (ei lähetä oikeita sähköposteja)
+MAIL_MAILER=log
+
+# SMTP-asetukset jos haluat lähettää sähköposteja:
+# MAIL_MAILER=smtp
+# MAIL_HOST=smtp.example.com
+# MAIL_PORT=587
+# MAIL_USERNAME=your-smtp-user
+# MAIL_PASSWORD=your-smtp-password
+# MAIL_ENCRYPTION=tls
+# MAIL_FROM_ADDRESS=noreply@example.com
+# MAIL_FROM_NAME="Palauteseinä"
+
+# -----------------------------------------------------------------------------
+# TELESCOPE (valinnainen)
+# -----------------------------------------------------------------------------
+TELESCOPE_ENABLED=true
 
 # -----------------------------------------------------------------------------
 # DEPLOYMENT FLAGS
@@ -124,9 +69,12 @@ TELESCOPE_ENABLED=true
 RUN_MIGRATIONS=false
 
 # =============================================================================
-# COOLIFY-SPESIFISET MUUTTUJAT
+# ENSIMMÄINEN DEPLOY - OHJE
 # =============================================================================
-# Nämä Coolify voi injektoida automaattisesti:
-# - SERVICE_FQDN_APP (domain)
-# - SERVICE_URL_APP (URL)
-
+# 1. Lisää GitHub repo Coolifyyn
+# 2. Valitse Docker Compose
+# 3. Aseta Environment Variables (yllä olevat)
+# 4. Aseta RUN_MIGRATIONS=true
+# 5. Deploy
+# 6. Kun toimii, aseta RUN_MIGRATIONS=false
+# 7. Konfiguroi domain Coolify UI:ssa → Settings → Domains

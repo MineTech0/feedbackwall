@@ -3,22 +3,12 @@
 # =============================================================================
 # Käyttö: Coolify Docker Compose -projekti
 # 
-# ServersideUp PHP Image: serversideup/php:8.3-fpm-nginx
-# Valinta perusteltu:
-#   - FPM + Nginx on vakain ja testatuin combo Laravelille
-#   - Erinomainen suorituskyky OPcache + Nginx staattisille tiedostoille
-#   - Laaja yhteisötuki ja dokumentaatio
-#   - Helppo debugata ongelmatilanteissa
-#   - ServersideUp image sisältää:
-#     * OPcache valmiiksi konfiguroitu
-#     * www-data käyttäjä (UID 1000)
-#     * Healthcheck endpointit
-#     * Composer ja Node.js build tools
+# Coolify Magic Environment Variables:
+#   - SERVICE_FQDN_APP: Coolify generoi FQDN automaattisesti
+#   - SERVICE_PASSWORD_<NAME>: Coolify generoi salasanat automaattisesti
+#   - SERVICE_USER_<NAME>: Coolify generoi käyttäjänimet automaattisesti
 #
-# Vaihtoehto (modernimpi): serversideup/php:8.3-frankenphp
-#   - Yksinkertaisempi (yksi prosessi)
-#   - Laravel Octane -yhteensopiva
-#   - Mutta: Uudempi, vähemmän dokumentaatiota
+# ServersideUp PHP Image: serversideup/php:8.4-fpm-nginx
 # =============================================================================
 
 services:
@@ -30,7 +20,6 @@ services:
       context: .
       dockerfile: Dockerfile.production
       args:
-        # ServersideUp base image
         PHP_VERSION: "8.4"
     image: ${REGISTRY:-}feedbackwall:${IMAGE_TAG:-latest}
     container_name: feedbackwall-app
@@ -41,6 +30,9 @@ services:
       - "8080"
     
     environment:
+      # Coolify FQDN - tämä triggeröi Coolify proxyn
+      SERVICE_FQDN_APP_8080: /
+      
       # ServersideUp spesifiset
       SSL_MODE: "off"                    # Coolify hoitaa SSL:n
       PHP_OPCACHE_ENABLE: "1"
@@ -49,43 +41,50 @@ services:
       PHP_POST_MAX_SIZE: "64M"
       PHP_UPLOAD_MAX_FILESIZE: "64M"
       
-      # Laravel ympäristömuuttujat (Coolify injektoi nämä)
+      # Laravel ympäristömuuttujat
       APP_NAME: ${APP_NAME:-Palauteseinä}
       APP_ENV: ${APP_ENV:-production}
       APP_DEBUG: ${APP_DEBUG:-false}
-      APP_URL: ${APP_URL}
+      # Coolify generoi URL:n SERVICE_FQDN_APP:sta (jaetaan kaikkien containerien kesken)
+      APP_URL: ${SERVICE_FQDN_APP}
+      # APP_KEY pitää asettaa manuaalisesti Coolify UI:ssa
       APP_KEY: ${APP_KEY}
       
       LOG_CHANNEL: ${LOG_CHANNEL:-stderr}
       LOG_LEVEL: ${LOG_LEVEL:-warning}
       
-      DB_CONNECTION: ${DB_CONNECTION:-pgsql}
+      # Database - käytä Coolifyn generoituja arvoja
+      DB_CONNECTION: pgsql
       DB_HOST: ${DB_HOST:-postgres}
       DB_PORT: ${DB_PORT:-5432}
       DB_DATABASE: ${DB_DATABASE:-feedbackwall}
-      DB_USERNAME: ${DB_USERNAME:-feedbackwall}
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_USERNAME: $SERVICE_USER_POSTGRES
+      DB_PASSWORD: $SERVICE_PASSWORD_POSTGRES
       
-      CACHE_STORE: ${CACHE_STORE:-redis}
-      SESSION_DRIVER: ${SESSION_DRIVER:-redis}
-      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-redis}
+      # Cache, Session, Queue
+      CACHE_STORE: redis
+      SESSION_DRIVER: redis
+      QUEUE_CONNECTION: redis
       
+      # Redis - käytä Coolifyn generoitua salasanaa
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-null}
+      REDIS_PASSWORD: $SERVICE_PASSWORD_REDIS
       
-      MAIL_MAILER: ${MAIL_MAILER:-smtp}
-      MAIL_HOST: ${MAIL_HOST}
+      # Mail (konfiguroi Coolify UI:ssa)
+      MAIL_MAILER: ${MAIL_MAILER:-log}
+      MAIL_HOST: ${MAIL_HOST:-}
       MAIL_PORT: ${MAIL_PORT:-587}
-      MAIL_USERNAME: ${MAIL_USERNAME}
-      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       MAIL_ENCRYPTION: ${MAIL_ENCRYPTION:-tls}
-      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-}
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Palauteseinä}
       
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      GOOGLE_REDIRECT_URI: ${APP_URL}/auth/google/callback
+      # Google OAuth (konfiguroi Coolify UI:ssa)
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${SERVICE_FQDN_APP}/auth/google/callback
       
       # Admin & Moderation
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
@@ -97,13 +96,11 @@ services:
       RUN_MIGRATIONS: ${RUN_MIGRATIONS:-false}
     
     volumes:
-      # Persistent storage
       - app-storage:/var/www/html/storage/app
       - app-logs:/var/www/html/storage/logs
     
     networks:
       - feedbackwall-internal
-      - coolify                          # Coolify proxy verkko
     
     depends_on:
       postgres:
@@ -119,8 +116,6 @@ services:
       start_period: 60s
     
     labels:
-      # Coolify routing (vaihtoehto 1: käytä Coolify UI:ta)
-      # Tai konfiguroi labels:
       - "coolify.managed=true"
   
   # ---------------------------------------------------------------------------
@@ -136,48 +131,45 @@ services:
     container_name: feedbackwall-queue
     restart: unless-stopped
     
-    # Override: aja queue worker eikä web serveriä
     command: ["php", "artisan", "queue:work", "--sleep=3", "--tries=3", "--max-time=3600", "--memory=128"]
     
     environment:
-      # Rooli: kevyt alustus (vain odota tietokantaa)
       CONTAINER_ROLE: queue
       
-      # Samat kuin app, mutta ilman web-spesifejä
       APP_NAME: ${APP_NAME:-Palauteseinä}
       APP_ENV: ${APP_ENV:-production}
       APP_DEBUG: ${APP_DEBUG:-false}
-      APP_URL: ${APP_URL}
+      # Sama URL kuin app-containerilla
+      APP_URL: ${SERVICE_FQDN_APP}
       APP_KEY: ${APP_KEY}
       
       LOG_CHANNEL: ${LOG_CHANNEL:-stderr}
       LOG_LEVEL: ${LOG_LEVEL:-warning}
       
-      DB_CONNECTION: ${DB_CONNECTION:-pgsql}
+      DB_CONNECTION: pgsql
       DB_HOST: ${DB_HOST:-postgres}
       DB_PORT: ${DB_PORT:-5432}
       DB_DATABASE: ${DB_DATABASE:-feedbackwall}
-      DB_USERNAME: ${DB_USERNAME:-feedbackwall}
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_USERNAME: $SERVICE_USER_POSTGRES
+      DB_PASSWORD: $SERVICE_PASSWORD_POSTGRES
       
-      CACHE_STORE: ${CACHE_STORE:-redis}
-      SESSION_DRIVER: ${SESSION_DRIVER:-redis}
-      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-redis}
+      CACHE_STORE: redis
+      SESSION_DRIVER: redis
+      QUEUE_CONNECTION: redis
       
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-null}
+      REDIS_PASSWORD: $SERVICE_PASSWORD_REDIS
       
-      MAIL_MAILER: ${MAIL_MAILER:-smtp}
-      MAIL_HOST: ${MAIL_HOST}
+      MAIL_MAILER: ${MAIL_MAILER:-log}
+      MAIL_HOST: ${MAIL_HOST:-}
       MAIL_PORT: ${MAIL_PORT:-587}
-      MAIL_USERNAME: ${MAIL_USERNAME}
-      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       MAIL_ENCRYPTION: ${MAIL_ENCRYPTION:-tls}
-      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-}
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Palauteseinä}
       
-      # Moderation (queue jobs)
       MODERATION_SERVICE_URL: ${MODERATION_SERVICE_URL:-}
     
     volumes:
@@ -213,35 +205,34 @@ services:
     container_name: feedbackwall-scheduler
     restart: unless-stopped
     
-    # Override: aja scheduler
     command: ["php", "artisan", "schedule:work"]
     
     environment:
-      # Rooli: kevyt alustus (vain odota tietokantaa)
       CONTAINER_ROLE: scheduler
       
       APP_NAME: ${APP_NAME:-Palauteseinä}
       APP_ENV: ${APP_ENV:-production}
       APP_DEBUG: ${APP_DEBUG:-false}
-      APP_URL: ${APP_URL}
+      # Sama URL kuin app-containerilla
+      APP_URL: ${SERVICE_FQDN_APP}
       APP_KEY: ${APP_KEY}
       
       LOG_CHANNEL: ${LOG_CHANNEL:-stderr}
       LOG_LEVEL: ${LOG_LEVEL:-warning}
       
-      DB_CONNECTION: ${DB_CONNECTION:-pgsql}
+      DB_CONNECTION: pgsql
       DB_HOST: ${DB_HOST:-postgres}
       DB_PORT: ${DB_PORT:-5432}
       DB_DATABASE: ${DB_DATABASE:-feedbackwall}
-      DB_USERNAME: ${DB_USERNAME:-feedbackwall}
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_USERNAME: $SERVICE_USER_POSTGRES
+      DB_PASSWORD: $SERVICE_PASSWORD_POSTGRES
       
-      CACHE_STORE: ${CACHE_STORE:-redis}
-      QUEUE_CONNECTION: ${QUEUE_CONNECTION:-redis}
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
       
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-null}
+      REDIS_PASSWORD: $SERVICE_PASSWORD_REDIS
     
     volumes:
       - app-storage:/var/www/html/storage/app
@@ -265,9 +256,10 @@ services:
     restart: unless-stopped
     
     environment:
+      # Coolify generoi käyttäjän ja salasanan automaattisesti
       POSTGRES_DB: ${DB_DATABASE:-feedbackwall}
-      POSTGRES_USER: ${DB_USERNAME:-feedbackwall}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: $SERVICE_USER_POSTGRES
+      POSTGRES_PASSWORD: $SERVICE_PASSWORD_POSTGRES
       PGDATA: /var/lib/postgresql/data/pgdata
     
     volumes:
@@ -277,7 +269,7 @@ services:
       - feedbackwall-internal
     
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-feedbackwall} -d ${DB_DATABASE:-feedbackwall}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -291,10 +283,11 @@ services:
     container_name: feedbackwall-redis
     restart: unless-stopped
     
+    # Coolify generoi REDIS salasanan automaattisesti
     command: >
       redis-server
       --appendonly yes
-      --requirepass ${REDIS_PASSWORD:-null}
+      --requirepass $SERVICE_PASSWORD_REDIS
       --maxmemory 128mb
       --maxmemory-policy allkeys-lru
     
@@ -305,7 +298,7 @@ services:
       - feedbackwall-internal
     
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-null}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "$SERVICE_PASSWORD_REDIS", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -317,10 +310,7 @@ services:
 networks:
   feedbackwall-internal:
     driver: bridge
-    internal: true                       # Ei ulkoista pääsyä
-  
-  coolify:
-    external: true                       # Coolify luo tämän
+    internal: true
 
 # =============================================================================
 # VOLUMES
@@ -336,31 +326,23 @@ volumes:
     driver: local
 
 # =============================================================================
-# HUOMIOT COOLIFY-KÄYTÖSSÄ
+# COOLIFY MAGIC VARIABLES - DOKUMENTAATIO
 # =============================================================================
-# 1. Ympäristömuuttujat:
-#    - Älä kovakoodaa salaisuuksia tähän tiedostoon
-#    - Konfiguroi Coolify UI:ssa: Settings → Environment Variables
+# Coolify generoi automaattisesti:
+#   - SERVICE_FQDN_APP: https://your-domain.com (asetetaan Coolify UI:ssa)
+#   - SERVICE_USER_POSTGRES: Satunnainen käyttäjänimi PostgreSQL:lle
+#   - SERVICE_PASSWORD_POSTGRES: Satunnainen salasana PostgreSQL:lle
+#   - SERVICE_PASSWORD_REDIS: Satunnainen salasana Redisille
 #
-# 2. Domain & HTTPS:
-#    - Konfiguroi Coolify UI:ssa: Settings → Domains
-#    - Coolify hoitaa Let's Encrypt automaattisesti
+# Sinun täytyy asettaa manuaalisesti Coolify UI:ssa:
+#   - APP_KEY: Laravel encryption key (php artisan key:generate --show)
+#   - GOOGLE_CLIENT_ID: Google OAuth client ID
+#   - GOOGLE_CLIENT_SECRET: Google OAuth client secret
+#   - ADMIN_EMAILS: Pilkuilla erotettu lista admin-sähköposteista
+#   - MAIL_*: Sähköpostiasetukset (valinnainen)
 #
-# 3. Networking:
-#    - 'coolify' verkko on external, Coolify luo sen
-#    - Jos Coolify ei löydä sitä, luo manuaalisesti:
-#      docker network create coolify
-#
-# 4. Volumes:
-#    - Coolify hallinnoi volumeja automaattisesti
-#    - Backup: Coolify → Settings → Backup
-#
-# 5. Ensimmäinen deploy:
-#    - Aseta RUN_MIGRATIONS=true
-#    - Deploy
-#    - Aseta RUN_MIGRATIONS=false
-#
-# 6. Updates:
-#    - Coolify ajaa 'docker compose pull && docker compose up -d'
-#    - Queue restart: php artisan queue:restart (ajaa sig handler)
-
+# Ensimmäinen deploy:
+#   1. Aseta APP_KEY Coolify UI:ssa
+#   2. Aseta RUN_MIGRATIONS=true
+#   3. Deploy
+#   4. Aseta RUN_MIGRATIONS=false
