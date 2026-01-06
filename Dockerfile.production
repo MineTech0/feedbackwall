@@ -82,6 +82,7 @@ LABEL org.opencontainers.image.source="https://github.com/your-org/feedbackwall"
 WORKDIR /var/www/html
 
 # PHP tuning ympäristömuuttujat (ServersideUp tukee näitä)
+# AUTORUN_* muuttujat asetetaan docker-composessa
 ENV SSL_MODE="off" \
     PHP_OPCACHE_ENABLE="1" \
     PHP_OPCACHE_MEMORY_CONSUMPTION="128" \
@@ -93,8 +94,7 @@ ENV SSL_MODE="off" \
     PHP_MEMORY_LIMIT="256M" \
     PHP_MAX_EXECUTION_TIME="30" \
     PHP_POST_MAX_SIZE="64M" \
-    PHP_UPLOAD_MAX_FILESIZE="64M" \
-    AUTORUN_ENABLED="false"
+    PHP_UPLOAD_MAX_FILESIZE="64M"
 
 # Kopioi composer riippuvuudet
 COPY --from=composer-builder --chown=www-data:www-data /build/vendor ./vendor
@@ -118,11 +118,8 @@ COPY --chown=www-data:www-data composer.json ./composer.json
 # Kopioi rakennetut Vite assets
 COPY --from=node-builder --chown=www-data:www-data /build/public/build ./public/build
 
-# Kopioi entrypoint skripti
-COPY --chown=www-data:www-data docker/entrypoint.sh /etc/entrypoint.d/99-laravel.sh
-RUN chmod +x /etc/entrypoint.d/99-laravel.sh
-
 # Luo tarvittavat kansiot ja aseta oikeudet
+# ServersideUp hoitaa entrypointin ja AUTORUN_* muuttujat
 RUN mkdir -p \
     storage/app/public \
     storage/framework/cache/data \
