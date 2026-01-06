@@ -39,7 +39,7 @@ class AuthController extends Controller
         }
 
         // Check against allowed emails
-        $allowedEmails = explode(',', config('app.admin_emails', env('ADMIN_EMAILS', '')));
+        $allowedEmails = config('app.admin_emails', []);
         if (in_array($googleUser->email, $allowedEmails)) {
             $user = User::create([
                 'name' => $googleUser->name,

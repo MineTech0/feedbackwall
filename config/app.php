@@ -123,4 +123,18 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Admin Emails
+    |--------------------------------------------------------------------------
+    |
+    | Pilkulla eroteltu lista admin-käyttäjien sähköpostiosoitteista.
+    | Näillä käyttäjillä on pääsy esim. Telescopeen tuotantoympäristössä.
+    |
+    */
+
+    'admin_emails' => array_filter(
+        array_map('trim', explode(',', env('ADMIN_EMAILS', '')))
+    ),
+
 ];
