@@ -100,6 +100,15 @@ GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
 GOOGLE_REDIRECT_URI=${APP_URL}/auth/google/callback
 
 # -----------------------------------------------------------------------------
+# ADMIN & MODERATION
+# -----------------------------------------------------------------------------
+# Pilkuilla erotettu lista admin-sähköposteista (Google OAuth)
+ADMIN_EMAILS=${ADMIN_EMAILS}
+
+# Ulkoinen moderointipalvelun URL (valinnainen)
+# MODERATION_SERVICE_URL=https://moderation-api.example.com
+
+# -----------------------------------------------------------------------------
 # TELESCOPE (Debug/Monitoring)
 # -----------------------------------------------------------------------------
 # Tuotannossa: enabled mutta filtteröity (vain virheet)

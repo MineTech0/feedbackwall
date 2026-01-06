@@ -15,6 +15,9 @@
 #   - Healthcheck endpointit sisäänrakennettu
 # =============================================================================
 
+# Global ARG - määritellään ennen ensimmäistä FROM jotta käytettävissä kaikissa stageissa
+ARG PHP_VERSION=8.4
+
 # -----------------------------------------------------------------------------
 # STAGE 1: Node.js - Build Vite assets
 # -----------------------------------------------------------------------------
@@ -68,7 +71,6 @@ RUN composer dump-autoload \
 # -----------------------------------------------------------------------------
 # STAGE 3: Production image
 # -----------------------------------------------------------------------------
-ARG PHP_VERSION=8.3
 FROM serversideup/php:${PHP_VERSION}-fpm-nginx AS production
 
 # Metadata
@@ -99,7 +101,10 @@ COPY --from=composer-builder --chown=www-data:www-data /build/vendor ./vendor
 
 # Kopioi Laravel-sovellus (paitsi mitä ei tarvita)
 COPY --chown=www-data:www-data app ./app
-COPY --chown=www-data:www-data bootstrap ./bootstrap
+COPY --chown=www-data:www-data bootstrap/app.php ./bootstrap/app.php
+COPY --chown=www-data:www-data bootstrap/providers.php ./bootstrap/providers.php
+# Kopioi bootstrap/cache composer-builderilta (oikein generoitu ilman dev-paketteja)
+COPY --from=composer-builder --chown=www-data:www-data /build/bootstrap/cache ./bootstrap/cache
 COPY --chown=www-data:www-data config ./config
 COPY --chown=www-data:www-data database ./database
 COPY --chown=www-data:www-data lang ./lang

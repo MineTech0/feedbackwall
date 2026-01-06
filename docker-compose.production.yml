@@ -31,7 +31,7 @@ services:
       dockerfile: Dockerfile.production
       args:
         # ServersideUp base image
-        PHP_VERSION: "8.3"
+        PHP_VERSION: "8.4"
     image: ${REGISTRY:-}feedbackwall:${IMAGE_TAG:-latest}
     container_name: feedbackwall-app
     restart: unless-stopped
@@ -87,6 +87,10 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_REDIRECT_URI: ${APP_URL}/auth/google/callback
       
+      # Admin & Moderation
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      MODERATION_SERVICE_URL: ${MODERATION_SERVICE_URL:-}
+      
       TELESCOPE_ENABLED: ${TELESCOPE_ENABLED:-true}
       
       # Deployment flag
@@ -127,7 +131,7 @@ services:
       context: .
       dockerfile: Dockerfile.production
       args:
-        PHP_VERSION: "8.3"
+        PHP_VERSION: "8.4"
     image: ${REGISTRY:-}feedbackwall:${IMAGE_TAG:-latest}
     container_name: feedbackwall-queue
     restart: unless-stopped
@@ -136,6 +140,9 @@ services:
     command: ["php", "artisan", "queue:work", "--sleep=3", "--tries=3", "--max-time=3600", "--memory=128"]
     
     environment:
+      # Rooli: kevyt alustus (vain odota tietokantaa)
+      CONTAINER_ROLE: queue
+      
       # Samat kuin app, mutta ilman web-spesifejä
       APP_NAME: ${APP_NAME:-Palauteseinä}
       APP_ENV: ${APP_ENV:-production}
@@ -169,6 +176,9 @@ services:
       MAIL_ENCRYPTION: ${MAIL_ENCRYPTION:-tls}
       MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS}
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Palauteseinä}
+      
+      # Moderation (queue jobs)
+      MODERATION_SERVICE_URL: ${MODERATION_SERVICE_URL:-}
     
     volumes:
       - app-storage:/var/www/html/storage/app
@@ -198,7 +208,7 @@ services:
       context: .
       dockerfile: Dockerfile.production
       args:
-        PHP_VERSION: "8.3"
+        PHP_VERSION: "8.4"
     image: ${REGISTRY:-}feedbackwall:${IMAGE_TAG:-latest}
     container_name: feedbackwall-scheduler
     restart: unless-stopped
@@ -207,6 +217,9 @@ services:
     command: ["php", "artisan", "schedule:work"]
     
     environment:
+      # Rooli: kevyt alustus (vain odota tietokantaa)
+      CONTAINER_ROLE: scheduler
+      
       APP_NAME: ${APP_NAME:-Palauteseinä}
       APP_ENV: ${APP_ENV:-production}
       APP_DEBUG: ${APP_DEBUG:-false}

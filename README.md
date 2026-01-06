@@ -69,24 +69,9 @@ Katso täydellinen deployment-opas: **[docs/PRODUCTION.md](docs/PRODUCTION.md)**
 | Tiedosto | Kuvaus |
 |----------|--------|
 | `docker-compose.production.yml` | Täysi tuotantokonfiguraatio (PostgreSQL + Redis) |
-| `docker-compose.simple.yml` | Yksinkertaistettu (MariaDB, ei Redistä) |
 | `Dockerfile.production` | Nginx + PHP-FPM image |
-| `Dockerfile.frankenphp` | FrankenPHP image (vaihtoehto) |
 | `docs/PRODUCTION.md` | Täydellinen deployment-dokumentaatio |
 | `docs/env-production-template.txt` | Environment muuttujapohja |
-
-### Docker-kuvan valinta
-
-**Nginx + PHP-FPM (suositeltu):**
-- `serversideup/php:8.3-fpm-nginx`
-- Vakaa, hyvin dokumentoitu
-- Käytä: `Dockerfile.production`
-
-**FrankenPHP (modernimpi):**
-- `serversideup/php:8.3-frankenphp`
-- Yksi prosessi, Laravel Octane -yhteensopiva
-- Käytä: `Dockerfile.frankenphp`
-
 ## Arkkitehtuuri
 
 ```
